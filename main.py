@@ -6,37 +6,38 @@ from Algorithms.simulatedAnnealing import simulated_annealing
 from Entities.cell import Cell
 from Entities.matrix import Matrix
 
-N = 4
+N = 5
 
 def main() -> None:
-    matrice = Matrix(N)
-    generati = [0] * (N * N)
+    matrix = Matrix(N)
+    generated = [0] * (N * N)
 
     for key in range(N * N):
-        indice = random.randrange(N * N)
-        while generati[indice] == 1:
-            indice = random.randrange(N * N)
+        index = random.randrange(N * N)
+        while generated[index] == 1:
+            index = random.randrange(N * N)
 
-        generati[indice] = 1
-        numero = indice + 1
-        matrice[Cell(key, numero)] = numero
+        generated[index] = 1
+        number = index + 1
+        matrix[Cell(key, number)] = number
 
-    matrice.stampa()
+    matrix.print_matrix()
 
-    if check_constraints(matrice.array):
-        #matrice = genetic(objective_function, matrice)
-        matrice = simulated_annealing(objective_function, matrice)
+    if check_constraints(matrix.array):
+        matrix = genetic(objective_function, matrix)
+        #matrix = simulated_annealing(objective_function, matrix)
 
-    matrice.stampa()
+    matrix.print_matrix()
 
     for i in range(N):
-        print(f"Somma riga {i + 1}: {matrice.somma_riga(i)}")
+        print(f"Row sum {i + 1}: {matrix.row_sum(i)}")
 
     for j in range(N):
-        print(f"Somma colonna {j + 1}: {matrice.somma_colonna(j)}")
+        print(f"Column sum {j + 1}: {matrix.column_sum(j)}")
 
-    print(f"Somma diagonale principale: {matrice.somma_diagonale_principale()}")
-    print(f"Somma diagonale secondaria: {matrice.somma_diagonale_secondaria()}")
+    print(f"Main diagonal sum: {matrix.main_diagonal_sum()}")
+    print(f"Secondary diagonal sum: {matrix.secondary_diagonal_sum()}")
+    print(f"Final fitness: {objective_function(matrix.array)}")
 
 
 if __name__ == "__main__":

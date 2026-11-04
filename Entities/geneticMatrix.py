@@ -7,6 +7,6 @@ class GeneticMatrix(Matrix):
         self.fitnessValue = fitnessValue
 
 
-# Alias per compatibilità con eventuale naming precedente
+# Backward-compatible alias for the previous class name.
 genetic_matrix = GeneticMatrix
 
