@@ -4,7 +4,7 @@ from math import exp
 from Entities.cell import Cell
 from Entities.matrix import Matrix
 
-TEMPERATURE = 1000
+TEMPERATURE = 80000
 
 
 def swap(initial: Matrix, current: Cell) -> tuple[Matrix, Cell]:

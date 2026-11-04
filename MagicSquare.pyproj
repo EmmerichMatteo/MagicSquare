@@ -17,9 +17,11 @@
   <ItemGroup>
     <Compile Include="Algorithms\functions.py" />
     <Compile Include="Algorithms\simulatedAnnealing.py" />
+    <Compile Include="Algorithms\genetic.py" />
     <Compile Include="Entities\cell.py" />
     <Compile Include="main.py" />
     <Compile Include="Entities\matrix.py" />
+    <Compile Include="Entities\geneticMatrix.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Algorithms\" />
@@ -31,3 +33,4 @@
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <Target Name="CoreCompile" />
 </Project>
+

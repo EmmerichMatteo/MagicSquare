@@ -1,3 +1,4 @@
+from Algorithms.genetic import genetic
 import random
 
 from Algorithms.functions import check_constraints, objective_function
@@ -5,7 +6,7 @@ from Algorithms.simulatedAnnealing import simulated_annealing
 from Entities.cell import Cell
 from Entities.matrix import Matrix
 
-N = 3
+N = 4
 
 def main() -> None:
     matrice = Matrix(N)
@@ -23,6 +24,7 @@ def main() -> None:
     matrice.stampa()
 
     if check_constraints(matrice.array):
+        #matrice = genetic(objective_function, matrice)
         matrice = simulated_annealing(objective_function, matrice)
 
     matrice.stampa()
