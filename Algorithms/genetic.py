@@ -4,175 +4,180 @@ from Algorithms.functions import check_constraints
 from Entities.geneticMatrix import GeneticMatrix
 from Entities.matrix import Matrix
 
-def genetic_permutation(f, initial_or_n, n_matrices: int | None = None, excluded: set[tuple[int, ...]] | None = None) -> list[GeneticMatrix]:
+
+def genetic_permutation(
+    f,
+    initial_or_n,
+    n_matrices: int | None = None,
+    excluded: set[tuple[int, ...]] | None = None,
+) -> list[GeneticMatrix]:
+    """Genera candidati distinti e li ordina per errore crescente."""
     n = initial_or_n.n if isinstance(initial_or_n, Matrix) else int(initial_or_n)
     if n <= 2:
         raise ValueError("n must be greater than 2")
     if n_matrices is None:
         n_matrices = 5 * n * n
-    base_elements = list(range(1, n * n + 1))
-    matrices: list[GeneticMatrix] = []
-    seen: set[tuple[int, ...]] = set() if excluded is None else set(excluded)
+
+    values = range(1, n * n + 1)
+
+    # Copia le esclusioni per poter aggiungere i candidati già generati
+    # senza modificare l'insieme ricevuto dal chiamante.
+    seen = set() if excluded is None else set(excluded)
+    matrices = []
 
     while len(matrices) < n_matrices:
-        perm = list(base_elements)
-        random.shuffle(perm)
-        perm_tuple = tuple(perm)
+        # Estrae tutti i numeri senza ripetizioni, in ordine casuale.
+        array = random.sample(values, len(values))
+        key = tuple(array)
+        if key in seen or not check_constraints(array):
+            continue
 
-        if perm_tuple not in seen and check_constraints(perm):
-            seen.add(perm_tuple)
-            fitness = int(f(perm))
-            matrices.append(GeneticMatrix(n, perm, fitnessValue=fitness))
-            if fitness == 0:
-                break
+        seen.add(key)
+        score = int(f(array))
+        matrices.append(GeneticMatrix(n, array, fitnessValue=score))
 
-    matrices.sort(key=lambda m: m.fitnessValue)
+        # Una soluzione permette di terminare prima di completare la lista.
+        if score == 0:
+            break
+
+    matrices.sort(key=lambda matrix: matrix.fitnessValue)
     return matrices
 
-def genetic(f, initial, max_generations: int | None = None):
-    """Return the best individual found by genetic reproduction."""
-    return _genetic_search(f, initial, max_generations)
+
+def _crossover(parent, donor):
+    """Copia un blocco della base e completa il figlio nell'ordine del donatore."""
+    # I tagli sono confini dell'array piatto. Il blocco può attraversare più righe.
+    start, end = sorted(random.sample(range(len(parent) + 1), 2))
+    block = parent[start:end]
+    inherited = set(block)
+
+    # Salta i valori già ereditati per conservare la permutazione.
+    remaining = [value for value in donor if value not in inherited]
+
+    # Rimette il blocco nelle stesse posizioni che occupava nella base.
+    return remaining[:start] + block + remaining[start:]
 
 
-def _crossover(parent, donor, cells):
-    """Inherit a random number of positions, up to a third of the cells."""
-    child = parent.copy()
-    count = random.randint(1, len(cells) // 3)
-    inherited = random.sample(cells, count)
-    for index in inherited:
-        value = donor[index]
-        if child[index] != value:
-            other = child.index(value)
-            child[index], child[other] = child[other], child[index]
-    return child if child != parent else None
+def _mutate(child, cells, score=None, f=None):
+    """Scambia due celle distinte, conservando tutti i valori del quadrato."""
+    i, j = random.sample(cells, 2)
+    child[i], child[j] = child[j], child[i]
+    if f is not None:
+        new_score = int(f(child))
+        return child, new_score
+    if score is not None:
+        return child, score
+    return child
 
 
-def _mutate(child, cells, swaps, prefer_nearby=False):
-    for _ in range(swaps):
-        if prefer_nearby and random.random() < 0.90:
-            i = random.randrange(len(cells))
-            value = child[i]
-            target = value + random.choice((-2, -1, -1, 1, 1, 2))
-            if not 1 <= target <= len(cells):
-                target = value + (1 if target < 1 else -1)
-            j = child.index(target)
-        else:
-            i, j = random.sample(cells, 2)
-        child[i], child[j] = child[j], child[i]
+def _mutate_best(child, score, f, cells,n):
+    """Confronta il candidato con un massimo di dodici varianti."""
+    best, best_score = child, score
 
-
-def _correct_one_line(child, lines, target):
-    """Try one directed swap to make a sampled row, column or diagonal exact."""
-    for line in random.sample(lines, 4):
-        delta = target - sum(child[i] for i in line)
-        if delta == 0:
-            continue
-        i = random.choice(line)
-        desired = child[i] + delta
-        if 1 <= desired <= len(child):
-            j = child.index(desired)
-            if j not in line:
-                child[i], child[j] = child[j], child[i]
-                return True
-    return False
-
-
-def _select_mutation(child, score, f, cells, lines, target, near_solution):
-    for _ in range(3 if near_solution else 1):
+    for _ in range(n):
+        # Ogni variante riparte dallo stesso candidato.
         mutant = child.copy()
-        swaps = random.choice((1, 1, 2, 2, 3, 4))
-        if near_solution and random.random() < 0.60:
-            _mutate(mutant, cells, swaps - 1, prefer_nearby=True)
-            if not _correct_one_line(mutant, lines, target):
-                _mutate(mutant, cells, 1, prefer_nearby=True)
-        else:
-            _mutate(mutant, cells, swaps, prefer_nearby=near_solution)
+        _mutate(mutant, cells)
+
         mutant_score = int(f(mutant))
-        if mutant_score <= score:
-            child, score = mutant, mutant_score
-            if score == 0:
-                break
-    return child, score
+
+        # Accetta un miglioramento. A parità con il candidato originale,
+        # preferisce la prima variante che raggiunge lo stesso errore.
+        if mutant_score < best_score or (
+            mutant_score == best_score and best is child
+        ):
+            best, best_score = mutant, mutant_score
+        if best_score == 0:
+            break
+
+    return best, best_score
 
 
-def _exploration_chance(array, lines, target):
-    """Probability that two independently sampled lines both need repair."""
-    incorrect = sum(sum(array[i] for i in line) != target for line in lines)
-    return (incorrect / len(lines)) ** 2
-
-
-def _genetic_search(f, initial, max_generations: int | None = None):
+def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
+    """Cerca un quadrato magico e restituisce il miglior candidato trovato."""
+    # Se riceve una Matrix, ne usa la dimensione per creare una popolazione casuale.
     n = initial.n if isinstance(initial, Matrix) else int(initial)
     if n <= 2:
         raise ValueError("n must be greater than 2")
     if max_generations is None:
         max_generations = 350 * n * n
 
-    population_size = 48
+    population_size = 5 * n * n
     indices = range(population_size)
     cells = range(n * n)
     values = range(1, n * n + 1)
-    target = n * (n * n + 1) // 2
-    lines = [range(i * n, (i + 1) * n) for i in range(n)]
-    lines += [range(i, n * n, n) for i in range(n)]
-    lines += [range(0, n * n, n + 1), range(n - 1, n * n - 1, n - 1)]
+
+    # Ogni individuo è una permutazione dei numeri da 1 a n².
+    # Il punteggio di population[i] è conservato in scores[i].
     population = [random.sample(values, len(cells)) for _ in indices]
     scores = [int(f(array)) for array in population]
-    exploration = [_exploration_chance(array, lines, target) for array in population]
-    stalled = [0] * population_size
+
+    # Conserva il record a parte, anche se la sua posizione viene rigenerata.
     best_index = min(indices, key=scores.__getitem__)
-    best_array, best_score = population[best_index], scores[best_index]
+    best, best_score = population[best_index], scores[best_index]
+    stalled = 0
+
     if best_score == 0:
-        return GeneticMatrix(n, best_array, fitnessValue=0)
+        return GeneticMatrix(n, best, fitnessValue=0)
 
-    # One generation attempts one offspring per population slot on average.
-    # Replace parents immediately, preserving multiple lines of descent.
+    # Ciclo delle generazioni:
+    # A ogni generazione viene creata una new_population di dimensione pari a population_size.
+    # Quando new_population è completa, sostituisce la popolazione corrente (generational GA).
     for _ in range(max_generations):
-        for _ in indices:
-            parent, donor = random.sample(indices, 2)
-            if scores[parent] != scores[donor]:
-                if scores[donor] < scores[parent]:
-                    parent, donor = donor, parent
-                if random.random() < 0.30:
-                    parent, donor = donor, parent
+        new_population = []
+        new_scores = []
 
-            parent_score = scores[parent]
-            preserve_lines = random.random() >= exploration[parent]
-            child = _crossover(population[parent], population[donor], cells)
-            if child is None:
-                child, score = _select_mutation(
-                    population[parent], parent_score, f, cells, lines, target, preserve_lines
-                )
-            else:
+        while len(new_population) < population_size:
+            parent, donor = random.sample(indices, 2)
+
+            # Con punteggi diversi, il migliore fa da base nel 70% dei casi.
+            # A parità, vale l'ordine di estrazione.
+            if scores[parent] > scores[donor]:
+                parent, donor = donor, parent
+            if scores[parent] != scores[donor] and random.random() < 0.30:
+                parent, donor = donor, parent
+
+            # Se il crossover salta, il candidato di partenza è la base.
+            child, score = population[parent], scores[parent]
+            if random.random() < 0.65:
+                child = _crossover(child, population[donor])
                 score = int(f(child))
-                if score and random.random() < 0.65:
-                    child, score = _select_mutation(child, score, f, cells, lines, target, preserve_lines)
+            
+            # La mutazione ha una probabilità separata e salta se il candidato
+            # è già una soluzione.
+            if score!= 0 and random.random() < 0.85:
+                child, score = _mutate_best(child, score, f, cells, n)
+            if score!= 0 and random.random() < 0.15:
+                child, score = _mutate(child.copy(), cells, score, f)
+
             if score == 0:
                 return GeneticMatrix(n, child, fitnessValue=0)
+
+            new_population.append(child)
+            new_scores.append(score)
+
             if score < best_score:
-                best_array, best_score = child, score
+                best, best_score, stalled = child, score, 0
 
-            if score <= parent_score and child is not population[parent]:
-                population[parent], scores[parent] = child, score
-                exploration[parent] = _exploration_chance(child, lines, target)
-            if score < parent_score:
-                stalled[parent] = 0
-                continue
+        # Terminato il ciclo di generazione, la nuova popolazione sostituisce la precedente
+        population = new_population
+        scores = new_scores
 
-            stalled[parent] += 1
-            if stalled[parent] >= 250:
-                elite = sorted(indices, key=scores.__getitem__)[:population_size // 4]
-                founder = random.choice(elite)
-                immigrant = population[founder].copy()
-                # Preserve more of a good founder's structure on most restarts.
-                nearby_restart = random.random() < 0.85 * (1 - exploration[founder])
-                _mutate(immigrant, cells, random.randint(2, 7), prefer_nearby=nearby_restart)
+        # Conta le generazioni che non migliorano il record globale.
+        stalled += 1
+        if stalled >= 500:
+            # Rigenera il 20% della popolazione in posizioni scelte a caso.
+            for i in random.sample(indices, population_size // 5):
+                immigrant = random.sample(values, len(cells))
                 score = int(f(immigrant))
                 if score == 0:
                     return GeneticMatrix(n, immigrant, fitnessValue=0)
-                population[parent], scores[parent], stalled[parent] = immigrant, score, 0
-                exploration[parent] = _exploration_chance(immigrant, lines, target)
-                if score < best_score:
-                    best_array, best_score = immigrant, score
 
-    return GeneticMatrix(n, best_array, fitnessValue=best_score)
+                population[i], scores[i] = immigrant, score
+                if score < best_score:
+                    best, best_score = immigrant, score
+
+            stalled = 0
+
+    # Al limite delle generazioni restituisce il record dell'intera ricerca.
+    return GeneticMatrix(n, best, fitnessValue=best_score)
