@@ -7,7 +7,7 @@ from Algorithms.simulatedAnnealing import simulated_annealing
 from Entities.cell import Cell
 from Entities.matrix import Matrix
 
-N = 6
+N = 5
 
 def format_time(seconds: float) -> str:
     hours = int(seconds // 3600)
