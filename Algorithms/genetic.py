@@ -61,6 +61,15 @@ def _tournament(scores, excluded=None):
     return first if scores[first] <= scores[second] else second
 
 
+def _random_individual(values, excluded):
+    """Estrae una permutazione assente dalla popolazione di destinazione."""
+    while True:
+        array = random.sample(values, len(values))
+        key = tuple(array)
+        if key not in excluded:
+            return array, key
+
+
 def _crossover(parent, donor):
     """Copia un blocco della base e completa il figlio nell'ordine del donatore."""
     # I tagli sono confini dell'array piatto. Il blocco può attraversare più righe.
@@ -190,7 +199,12 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
 
     # Ogni individuo è una permutazione dei numeri da 1 a n².
     # Il punteggio di population[i] è conservato in scores[i].
-    population = [random.sample(values, len(cells)) for _ in indices]
+    population = []
+    population_keys = set()
+    while len(population) < population_size:
+        array, key = _random_individual(values, population_keys)
+        population.append(array)
+        population_keys.add(key)
     scores = [int(f(array)) for array in population]
 
     # Conserva il record a parte, anche se la sua posizione viene rigenerata.
@@ -208,8 +222,25 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
         elite_indices = nsmallest(elite_count, indices, key=scores.__getitem__)
         new_population = [population[i].copy() for i in elite_indices]
         new_scores = [scores[i] for i in elite_indices]
+        new_keys = {tuple(array) for array in new_population}
+        duplicate_attempts = 0
 
         while len(new_population) < population_size:
+            # Dopo ripetute collisioni inserisce un individuo nuovo, evitando
+            # di restare bloccati quando i genitori producono sempre duplicati.
+            if duplicate_attempts >= 10:
+                child, key = _random_individual(values, new_keys)
+                score = int(f(child))
+                if score == 0:
+                    return GeneticMatrix(n, child, fitnessValue=0)
+                new_population.append(child)
+                new_scores.append(score)
+                new_keys.add(key)
+                duplicate_attempts = 0
+                if score < best_score:
+                    best, best_score, stalled = child, score, 0
+                continue
+
             parent = _tournament(scores)
             donor = _tournament(scores, excluded=parent)
 
@@ -217,8 +248,13 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
             if scores[parent] > scores[donor]:
                 parent, donor = donor, parent
 
-            child = _crossover(population[parent], population[donor])
-            score = int(f(child))
+            if random.random() < 0.80:
+                child = _crossover(population[parent], population[donor])
+                score = int(f(child))
+            else:
+                # La copia protegge il genitore da eventuali mutazioni in-place.
+                child = population[parent].copy()
+                score = scores[parent]
 
             # La mutazione ha una probabilità separata e salta se il candidato
             # è già una soluzione.
@@ -231,8 +267,15 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
             if score == 0:
                 return GeneticMatrix(n, child, fitnessValue=0)
 
+            key = tuple(child)
+            if key in new_keys:
+                duplicate_attempts += 1
+                continue
+
             new_population.append(child)
             new_scores.append(score)
+            new_keys.add(key)
+            duplicate_attempts = 0
 
             if score < best_score:
                 best, best_score, stalled = child, score, 0
@@ -240,17 +283,20 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
         # Terminato il ciclo di generazione, la nuova popolazione sostituisce la precedente
         population = new_population
         scores = new_scores
+        population_keys = new_keys
 
         # Conta le generazioni che non migliorano il record globale.
         stalled += 1
         if stalled >= 200:
             # Rigenera il 20% della popolazione in posizioni scelte a caso.
             for i in random.sample(indices, population_size // 5):
-                immigrant = random.sample(values, len(cells))
+                immigrant, key = _random_individual(values, population_keys)
                 score = int(f(immigrant))
                 if score == 0:
                     return GeneticMatrix(n, immigrant, fitnessValue=0)
 
+                population_keys.remove(tuple(population[i]))
+                population_keys.add(key)
                 population[i], scores[i] = immigrant, score
                 if score < best_score:
                     best, best_score = immigrant, score

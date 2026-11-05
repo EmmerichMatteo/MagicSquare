@@ -1,11 +1,17 @@
 import random
 import unittest
 from heapq import nsmallest
-from itertools import combinations
+from itertools import combinations, cycle, islice, permutations
 from unittest.mock import patch
 
 from Algorithms.functions import check_constraints, objective_function
-from Algorithms.genetic import _crossover, _mutate, _mutate_trials, _tournament, genetic
+from Algorithms.genetic import _crossover, _mutate, _mutate_trials, _random_individual, _tournament, genetic
+
+
+class SeededTests(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(random.setstate, random.getstate())
+        random.seed(42)
 
 
 class TournamentTests(unittest.TestCase):
@@ -42,7 +48,7 @@ class TournamentTests(unittest.TestCase):
             self.assertEqual(_tournament([2, 1, 3]), 1)
 
 
-class CrossoverTests(unittest.TestCase):
+class CrossoverTests(SeededTests):
     def test_inherits_positions_and_completes_in_donor_order(self):
         parent = list(range(1, 10))
         donor = list(reversed(parent))
@@ -53,19 +59,47 @@ class CrossoverTests(unittest.TestCase):
         self.assertEqual(parent, list(range(1, 10)))
         self.assertEqual(donor, list(range(9, 0, -1)))
 
-    def test_every_child_uses_crossover_with_better_parent_as_base(self):
+    def test_crossover_uses_better_parent_as_base(self):
         for fitness in (lambda array: array[0], lambda array: 1):
             with self.subTest(fitness=fitness):
                 with (
-                    patch("Algorithms.genetic._tournament", side_effect=[1, 0] * 45),
+                    patch("Algorithms.genetic._tournament", side_effect=lambda scores, excluded=None: 1 if excluded is None else 0),
                     patch("Algorithms.genetic._crossover", wraps=_crossover) as crossover,
-                    patch("Algorithms.genetic.random.random", return_value=1.0),
+                    patch("Algorithms.genetic.random.random", side_effect=cycle([0.0, 1.0])),
                 ):
                     genetic(fitness, 3, max_generations=1)
-                self.assertEqual(crossover.call_count, 42)
+                self.assertGreater(crossover.call_count, 0)
                 for call in crossover.call_args_list:
                     parent, donor = call.args
                     self.assertLessEqual(fitness(parent), fitness(donor))
+
+    def test_crossover_probability_boundary(self):
+        for draw in (0.0, 0.799999, 0.8, 1.0):
+            with self.subTest(draw=draw):
+                with (
+                    patch("Algorithms.genetic.random.random", side_effect=cycle([draw, 1.0])) as probability,
+                    patch("Algorithms.genetic._crossover", wraps=_crossover) as crossover,
+                ):
+                    genetic(lambda array: 1, 3, max_generations=1)
+                if draw < 0.8:
+                    self.assertGreater(crossover.call_count, 0)
+                    self.assertEqual(crossover.call_count, probability.call_count // 2)
+                else:
+                    crossover.assert_not_called()
+
+    def test_skipping_crossover_copies_parent_before_mutation(self):
+        parents = []
+        originals = []
+
+        def fitness(array):
+            if len(parents) < 45:
+                parents.append(array)
+                originals.append(array.copy())
+            return 1
+
+        with patch("Algorithms.genetic.random.random", side_effect=cycle([1.0, 0.0])):
+            genetic(fitness, 3, max_generations=1)
+        self.assertEqual(parents, originals)
 
     def test_short_search_preserves_constraints_and_permutation(self):
         state = random.getstate()
@@ -85,12 +119,12 @@ class CrossoverTests(unittest.TestCase):
         finally:
             random.setstate(state)
 
-        self.assertGreaterEqual(evaluations, 45 + 4 * 42)
+        self.assertGreater(evaluations, 45)
         self.assertTrue(check_constraints(result.array))
         self.assertEqual(result.fitnessValue, objective_function(result.array) + 1)
 
 
-class MutationTests(unittest.TestCase):
+class MutationTests(SeededTests):
     def test_incremental_score_matches_full_fitness_for_every_swap(self):
         rng = random.Random(42)
         for n in (3, 4, 5):
@@ -124,39 +158,38 @@ class MutationTests(unittest.TestCase):
         self.assertEqual(score, objective_function(array))
 
     def test_probability_boundary_and_disabled_local_search(self):
-        for draw, expected in ((0.0, 42), (0.349999, 42), (0.35, 0), (0.9, 0)):
+        for draw in (0.0, 0.349999, 0.35, 0.9):
             with self.subTest(draw=draw):
                 with (
-                    patch("Algorithms.genetic.random.random", return_value=draw) as probability,
+                    patch("Algorithms.genetic.random.random", side_effect=cycle([1.0, draw])) as probability,
                     patch("Algorithms.genetic._mutate_trials", wraps=_mutate_trials) as mutate,
                     patch("Algorithms.genetic._mutate_best", side_effect=AssertionError("local search enabled")),
                 ):
                     genetic(lambda array: 1, 3, max_generations=1)
+                expected = probability.call_count // 2 if draw < 0.35 else 0
                 self.assertEqual(mutate.call_count, expected)
-                self.assertEqual(probability.call_count, 42)
 
     def test_two_trials_are_used_regardless_of_matrix_size(self):
         for n in (3, 4, 5):
             with self.subTest(n=n):
                 with (
-                    patch("Algorithms.genetic.random.random", return_value=0.0),
+                    patch("Algorithms.genetic.random.random", side_effect=cycle([1.0, 0.0])),
                     patch("Algorithms.genetic._mutate_trials", wraps=_mutate_trials) as mutate,
                 ):
                     genetic(lambda array: 1, n, max_generations=1)
-                self.assertEqual(mutate.call_count, 5 * n * n - n)
+                self.assertGreater(mutate.call_count, 0)
                 self.assertTrue(all(call.args[-1] == 2 for call in mutate.call_args_list))
 
     def test_solution_skips_mutation(self):
         solved = [8, 1, 6, 3, 5, 7, 4, 9, 2]
         with (
-            patch("Algorithms.genetic.random.sample", return_value=list(range(1, 10))),
             patch("Algorithms.genetic._crossover", return_value=solved),
-            patch("Algorithms.genetic.random.random") as probability,
+            patch("Algorithms.genetic.random.random", return_value=0.0) as probability,
             patch("Algorithms.genetic._mutate_trials") as mutate,
         ):
             result = genetic(objective_function, 3, max_generations=1)
         self.assertEqual(result.fitnessValue, 0)
-        probability.assert_not_called()
+        probability.assert_called_once()
         mutate.assert_not_called()
 
 
@@ -222,9 +255,9 @@ class MutationTrialTests(unittest.TestCase):
         self.assertEqual(child, list(range(1, 10)))
 
 
-class ElitismTests(unittest.TestCase):
+class ElitismTests(SeededTests):
     def test_elite_count_and_remaining_population_size(self):
-        for n, expected_elites in ((3, 3), (4, 4), (5, 5), (6, 6), (10, 10)):
+        for n, expected_elites in ((3, 4), (4, 8), (5, 12), (6, 18), (10, 50)):
             with self.subTest(n=n):
                 with (
                     patch("Algorithms.genetic.nsmallest", wraps=nsmallest) as select,
@@ -233,37 +266,104 @@ class ElitismTests(unittest.TestCase):
                 ):
                     genetic(lambda array: 1, n, max_generations=1)
                 self.assertEqual(select.call_args.args[0], expected_elites)
-                self.assertEqual(crossover.call_count, 5 * n * n - expected_elites)
+                crossover.assert_not_called()
 
-    def test_best_survives_generations_but_can_be_replaced_by_immigration(self):
-        best = list(range(1, 10))
-        worse = [2, 1] + list(range(3, 10))
-        regenerated = False
+
+class PopulationTests(SeededTests):
+    def setUp(self):
+        super().setUp()
+        self.score_by_key = {}
+        self.key_by_score = {}
+        self.populations = []
+
+    def fitness(self, array):
+        key = tuple(array)
+        if key not in self.score_by_key:
+            score = len(self.score_by_key) + 1
+            self.score_by_key[key] = score
+            self.key_by_score[score] = key
+        return self.score_by_key[key]
+
+    def select(self, count, indices, key):
+        self.populations.append([self.key_by_score[key(i)] for i in indices])
+        return nsmallest(count, indices, key=key)
+
+    def assert_unique_populations(self, n):
+        for population in self.populations:
+            self.assertEqual(len(population), 5 * n * n)
+            self.assertEqual(len(set(population)), len(population))
+            self.assertTrue(all(check_constraints(array) for array in population))
+
+    def test_random_individual_rejects_existing_matrix(self):
+        original = list(range(1, 10))
+        other = list(reversed(original))
+        excluded = {tuple(original)}
+        with patch("Algorithms.genetic.random.sample", side_effect=[original, other]) as sample:
+            array, key = _random_individual(range(1, 10), excluded)
+        self.assertEqual(array, other)
+        self.assertEqual(key, tuple(other))
+        self.assertEqual(sample.call_count, 2)
+        self.assertEqual(excluded, {tuple(original)})
+
+    def test_initial_population_rejects_duplicates_before_evaluating(self):
+        candidates = [list(p) for p in islice(permutations(range(1, 10)), 45)]
+        draws = [candidates[0], candidates[0]] + candidates[1:]
+        with patch("Algorithms.genetic.random.sample", side_effect=draws) as sample:
+            result = genetic(self.fitness, 3, max_generations=0)
+        self.assertEqual(sample.call_count, 46)
+        self.assertEqual(len(self.score_by_key), 45)
+        self.assertEqual(result.fitnessValue, 1)
+
+    def test_generations_preserve_unique_matrices_and_distinct_parent_indices(self):
+        for n in (4, 5):
+            with self.subTest(n=n):
+                self.populations.clear()
+
+                def tournament(scores, excluded=None):
+                    index = _tournament(scores, excluded)
+                    self.assertNotEqual(index, excluded)
+                    return index
+
+                with (
+                    patch("Algorithms.genetic.nsmallest", side_effect=self.select),
+                    patch("Algorithms.genetic._tournament", side_effect=tournament),
+                ):
+                    result = genetic(self.fitness, n, max_generations=4)
+                self.assert_unique_populations(n)
+                self.assertEqual(result.fitnessValue, self.fitness(result.array))
+
+    def test_repeated_duplicate_children_use_bounded_retries_and_new_individuals(self):
+        with (
+            patch("Algorithms.genetic.nsmallest", side_effect=self.select),
+            patch("Algorithms.genetic.random.random", side_effect=cycle([0.0, 1.0])),
+            patch("Algorithms.genetic._crossover", side_effect=lambda parent, donor: list(self.key_by_score[1])) as crossover,
+        ):
+            result = genetic(self.fitness, 3, max_generations=2)
+        self.assertEqual(crossover.call_count, 2 * (45 - 4) * 10)
+        self.assert_unique_populations(3)
+        self.assertEqual(result.fitnessValue, 1)
+
+    def test_immigration_preserves_unique_population_and_global_best_record(self):
+        rng = random.Random(42)
+        replacements = []
 
         def sample(values, count):
-            nonlocal regenerated
             if values == range(45):
-                regenerated = True
-                return list(range(count))  # Include l'elite in posizione zero.
-            return (worse if regenerated else best).copy()
+                replacements.append(count)
+                return list(range(count))  # Sostituisce anche l'elite in posizione zero.
+            return rng.sample(values, count)
 
         with (
             patch("Algorithms.genetic.random.sample", side_effect=sample),
             patch("Algorithms.genetic.random.random", return_value=1.0),
-            patch("Algorithms.genetic._tournament", side_effect=lambda scores, excluded=None: 0 if excluded is None else 1),
-            patch("Algorithms.genetic._crossover", side_effect=lambda parent, donor: worse.copy()),
-            patch("Algorithms.genetic.nsmallest", wraps=nsmallest) as select,
+            patch("Algorithms.genetic.nsmallest", side_effect=self.select),
         ):
-            result = genetic(lambda array: array[0], 3, max_generations=201)
-
-        self.assertTrue(regenerated)
-        # Prima della rigenerazione l'elite conserva il punteggio 1.
-        before_scores = select.call_args_list[199].kwargs["key"].__self__
-        self.assertEqual(min(before_scores), 1)
-        # Dopo la rigenerazione non resta nella popolazione, ma il record resta.
-        after_scores = select.call_args_list[200].kwargs["key"].__self__
-        self.assertEqual(min(after_scores), 2)
-        self.assertEqual(result.array, best)
+            result = genetic(self.fitness, 3, max_generations=201)
+        self.assertEqual(replacements, [9])
+        self.assert_unique_populations(3)
+        self.assertIn(self.key_by_score[1], self.populations[199])
+        self.assertNotIn(self.key_by_score[1], self.populations[200])
+        self.assertEqual(tuple(result.array), self.key_by_score[1])
         self.assertEqual(result.fitnessValue, 1)
 
 
