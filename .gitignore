@@ -6,3 +6,4 @@ dist/
 obj/
 *.egg-info/
 *.pyproj.user
+benchmark-results/

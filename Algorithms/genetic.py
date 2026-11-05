@@ -1,6 +1,8 @@
 import random
+from heapq import nsmallest
+from math import isqrt
 
-from Algorithms.functions import check_constraints
+from Algorithms.functions import check_constraints, objective_function
 from Entities.geneticMatrix import GeneticMatrix
 from Entities.matrix import Matrix
 
@@ -44,6 +46,21 @@ def genetic_permutation(
     return matrices
 
 
+def _tournament(scores, excluded=None):
+    """Sceglie il migliore di due candidati distinti, escluso il vincitore precedente."""
+    size = len(scores)
+    if size == 2 and excluded is not None:
+        return 1 - excluded
+
+    first = random.randrange(size)
+    while first == excluded:
+        first = random.randrange(size)
+    second = random.randrange(size)
+    while second == excluded or second == first:
+        second = random.randrange(size)
+    return first if scores[first] <= scores[second] else second
+
+
 def _crossover(parent, donor):
     """Copia un blocco della base e completa il figlio nell'ordine del donatore."""
     # I tagli sono confini dell'array piatto. Il blocco può attraversare più righe.
@@ -58,16 +75,79 @@ def _crossover(parent, donor):
     return remaining[:start] + block + remaining[start:]
 
 
+def _swap_fitness(child, score, i, j):
+    """Aggiorna la fitness prima dello scambio, leggendo solo le linee coinvolte."""
+    n = isqrt(len(child))
+    ri, ci = divmod(i, n)
+    rj, cj = divmod(j, n)
+    delta = child[j] - child[i]
+
+    # Le due righe (o colonne) ricevono variazioni opposte della somma.
+    if ri != rj:
+        first = sum(child[ri * n:(ri + 1) * n])
+        second = sum(child[rj * n:(rj + 1) * n])
+        score += 2 * delta * (first - second + delta)
+    if ci != cj:
+        first = sum(child[k * n + ci] for k in range(n))
+        second = sum(child[k * n + cj] for k in range(n))
+        score += 2 * delta * (first - second + delta)
+
+    target = n * (n * n + 1) // 2
+    main_delta = delta * ((ri == ci) - (rj == cj))
+    if main_delta:
+        error = sum(child[k * n + k] for k in range(n)) - target
+        score += main_delta * (2 * error + main_delta)
+    other_delta = delta * ((ri + ci == n - 1) - (rj + cj == n - 1))
+    if other_delta:
+        error = sum(child[k * n + n - 1 - k] for k in range(n)) - target
+        score += other_delta * (2 * error + other_delta)
+    return score
+
+
 def _mutate(child, cells, score=None, f=None):
     """Scambia due celle distinte, conservando tutti i valori del quadrato."""
     i, j = random.sample(cells, 2)
+    incremental = f is objective_function and score is not None
+    if incremental:
+        score = _swap_fitness(child, score, i, j)
     child[i], child[j] = child[j], child[i]
+    if incremental:
+        return child, score
     if f is not None:
         new_score = int(f(child))
         return child, new_score
     if score is not None:
         return child, score
     return child
+
+
+def _mutate_trials(child, score, f, cells, n):
+    """Prova n scambi distinti sull'originale e applica solo il migliore."""
+    tried = set()
+    best_pair, best_score = None, None
+
+    while len(tried) < n:
+        i, j = sorted(random.sample(cells, 2))
+        if (i, j) in tried:
+            continue
+        tried.add((i, j))
+
+        if f is objective_function:
+            candidate_score = _swap_fitness(child, score, i, j)
+        else:
+            child[i], child[j] = child[j], child[i]
+            try:
+                candidate_score = int(f(child))
+            finally:
+                child[i], child[j] = child[j], child[i]
+
+        # Il primo scambio vince le parità; l'originale non è un candidato.
+        if best_score is None or candidate_score < best_score:
+            best_pair, best_score = (i, j), candidate_score
+
+    i, j = best_pair
+    child[i], child[j] = child[j], child[i]
+    return child, best_score
 
 
 def _mutate_best(child, score, f, cells,n):
@@ -103,6 +183,7 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
         max_generations = 350 * n * n
 
     population_size = 5 * n * n
+    elite_count = population_size // 10
     indices = range(population_size)
     cells = range(n * n)
     values = range(1, n * n + 1)
@@ -124,31 +205,28 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
     # A ogni generazione viene creata una new_population di dimensione pari a population_size.
     # Quando new_population è completa, sostituisce la popolazione corrente (generational GA).
     for _ in range(max_generations):
-        new_population = []
-        new_scores = []
+        elite_indices = nsmallest(elite_count, indices, key=scores.__getitem__)
+        new_population = [population[i].copy() for i in elite_indices]
+        new_scores = [scores[i] for i in elite_indices]
 
         while len(new_population) < population_size:
-            parent, donor = random.sample(indices, 2)
+            parent = _tournament(scores)
+            donor = _tournament(scores, excluded=parent)
 
-            # Con punteggi diversi, il migliore fa da base nel 70% dei casi.
-            # A parità, vale l'ordine di estrazione.
+            # Il vincitore migliore fa da base; a parità resta il primo.
             if scores[parent] > scores[donor]:
                 parent, donor = donor, parent
-            if scores[parent] != scores[donor] and random.random() < 0.30:
-                parent, donor = donor, parent
 
-            # Se il crossover salta, il candidato di partenza è la base.
-            child, score = population[parent], scores[parent]
-            if random.random() < 0.65:
-                child = _crossover(child, population[donor])
-                score = int(f(child))
-            
+            child = _crossover(population[parent], population[donor])
+            score = int(f(child))
+
             # La mutazione ha una probabilità separata e salta se il candidato
             # è già una soluzione.
-            if score!= 0 and random.random() < 0.85:
-                child, score = _mutate_best(child, score, f, cells, n)
-            if score!= 0 and random.random() < 0.15:
-                child, score = _mutate(child.copy(), cells, score, f)
+            # Ricerca locale disattivata temporaneamente.
+            # if score != 0 and random.random() < 0.85:
+            #     child, score = _mutate_best(child, score, f, cells, n)
+            if score != 0 and random.random() < 0.35:
+                child, score = _mutate_trials(child, score, f, cells, 2)
 
             if score == 0:
                 return GeneticMatrix(n, child, fitnessValue=0)
@@ -165,7 +243,7 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
 
         # Conta le generazioni che non migliorano il record globale.
         stalled += 1
-        if stalled >= 500:
+        if stalled >= 200:
             # Rigenera il 20% della popolazione in posizioni scelte a caso.
             for i in random.sample(indices, population_size // 5):
                 immigrant = random.sample(values, len(cells))
