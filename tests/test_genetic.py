@@ -1,5 +1,6 @@
 import random
 import unittest
+from collections import Counter
 from heapq import nsmallest
 from itertools import combinations, cycle, islice, permutations
 from unittest.mock import patch
@@ -191,6 +192,103 @@ class MutationTests(SeededTests):
         self.assertEqual(result.fitnessValue, 0)
         probability.assert_called_once()
         mutate.assert_not_called()
+
+
+class StagnationMutationTests(SeededTests):
+    def run_schedule(self, generations, improvement_generation=None,
+                     immigration_improves=False, solve_generation=None):
+        state = {"generation": 0, "single": Counter(), "trials": Counter(),
+                 "better": set(), "immigrations": 0}
+        solved = [8, 1, 6, 3, 5, 7, 4, 9, 2]
+
+        def fitness(array):
+            key = tuple(array)
+            if solve_generation is not None and key == tuple(solved):
+                return 0
+            return 9 if key in state["better"] else 10
+
+        def select(count, indices, key):
+            state["generation"] += 1
+            return nsmallest(count, indices, key=key)
+
+        def single(child, cells, score, f):
+            generation = state["generation"]
+            state["single"][generation] += 1
+            child, score = _mutate(child, cells, score, f)
+            if generation == improvement_generation and not state["better"]:
+                state["better"].add(tuple(child))
+                score = 9
+            return child, score
+
+        def trials(child, score, f, cells, count):
+            state["trials"][state["generation"]] += 1
+            return _mutate_trials(child, score, f, cells, count)
+
+        def individual(values, excluded):
+            array, key = _random_individual(values, excluded)
+            if len(excluded) == 45:
+                state["immigrations"] += 1
+                if immigration_improves:
+                    state["better"].add(key)
+            return array, key
+
+        def crossover(parent, donor):
+            if state["generation"] == solve_generation:
+                return solved.copy()
+            return _crossover(parent, donor)
+
+        with (
+            patch("Algorithms.genetic.nsmallest", side_effect=select),
+            patch("Algorithms.genetic._mutate", side_effect=single),
+            patch("Algorithms.genetic._mutate_trials", side_effect=trials),
+            patch("Algorithms.genetic._random_individual", side_effect=individual),
+            patch("Algorithms.genetic._crossover", side_effect=crossover),
+            patch("Algorithms.genetic.random.random", return_value=0.0),
+        ):
+            result = genetic(fitness, 3, max_generations=generations)
+        self.assertTrue(check_constraints(result.array))
+        self.assertEqual(result.fitnessValue, fitness(result.array))
+        return state, result
+
+    def test_random_mutation_starts_after_50_complete_stalled_generations(self):
+        state, _ = self.run_schedule(52)
+        for generation in range(1, 51):
+            self.assertGreater(state["trials"][generation], 0)
+            self.assertEqual(state["single"][generation], 0)
+        for generation in (51, 52):
+            self.assertGreater(state["single"][generation], 0)
+            self.assertEqual(state["trials"][generation], 0)
+
+    def test_improvement_immediately_restores_normal_mutation_and_resets_stall(self):
+        state, result = self.run_schedule(104, improvement_generation=53)
+        self.assertEqual(result.fitnessValue, 9)
+        self.assertEqual(state["single"][53], 1)
+        self.assertGreater(state["trials"][53], 0)
+        for generation in range(54, 104):
+            self.assertGreater(state["trials"][generation], 0)
+            self.assertEqual(state["single"][generation], 0)
+        self.assertGreater(state["single"][104], 0)
+        self.assertEqual(state["trials"][104], 0)
+
+    def test_immigration_without_improvement_keeps_random_mutation_active(self):
+        state, _ = self.run_schedule(201)
+        self.assertEqual(state["immigrations"], 9)
+        self.assertGreater(state["single"][201], 0)
+        self.assertEqual(state["trials"][201], 0)
+
+    def test_improving_immigration_restores_normal_mutation(self):
+        state, result = self.run_schedule(201, immigration_improves=True)
+        self.assertEqual(result.fitnessValue, 9)
+        self.assertEqual(state["immigrations"], 9)
+        self.assertEqual(state["single"][201], 0)
+        self.assertGreater(state["trials"][201], 0)
+
+    def test_solution_during_stall_skips_both_mutations(self):
+        state, result = self.run_schedule(51, solve_generation=51)
+        self.assertEqual(result.array, [8, 1, 6, 3, 5, 7, 4, 9, 2])
+        self.assertEqual(result.fitnessValue, 0)
+        self.assertEqual(state["single"][51], 0)
+        self.assertEqual(state["trials"][51], 0)
 
 
 class MutationTrialTests(unittest.TestCase):

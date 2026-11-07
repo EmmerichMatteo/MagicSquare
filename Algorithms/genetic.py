@@ -219,6 +219,7 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
     # A ogni generazione viene creata una new_population di dimensione pari a population_size.
     # Quando new_population è completa, sostituisce la popolazione corrente (generational GA).
     for _ in range(max_generations):
+        generation_best_score = best_score
         elite_indices = nsmallest(elite_count, indices, key=scores.__getitem__)
         new_population = [population[i].copy() for i in elite_indices]
         new_scores = [scores[i] for i in elite_indices]
@@ -261,8 +262,12 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
             # Ricerca locale disattivata temporaneamente.
             # if score != 0 and random.random() < 0.85:
             #     child, score = _mutate_best(child, score, f, cells, n)
-            if score != 0 and random.random() < 0.35:
-                child, score = _mutate_trials(child, score, f, cells, 2)
+            if score != 0:
+                if stalled >= 50:
+                    # Durante lo stallo applica sempre un solo scambio casuale.
+                    child, score = _mutate(child, cells, score, f)
+                elif random.random() < 0.35:
+                    child, score = _mutate_trials(child, score, f, cells, 2)
 
             if score == 0:
                 return GeneticMatrix(n, child, fitnessValue=0)
@@ -286,8 +291,9 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
         population_keys = new_keys
 
         # Conta le generazioni che non migliorano il record globale.
-        stalled += 1
-        if stalled >= 200:
+        if best_score == generation_best_score:
+            stalled += 1
+        if stalled > 0 and stalled % 200 == 0:
             # Rigenera il 20% della popolazione in posizioni scelte a caso.
             for i in random.sample(indices, population_size // 5):
                 immigrant, key = _random_individual(values, population_keys)
@@ -299,9 +305,7 @@ def genetic(f, initial, max_generations: int | None = None) -> GeneticMatrix:
                 population_keys.add(key)
                 population[i], scores[i] = immigrant, score
                 if score < best_score:
-                    best, best_score = immigrant, score
-
-            stalled = 0
+                    best, best_score, stalled = immigrant, score, 0
 
     # Al limite delle generazioni restituisce il record dell'intera ricerca.
     return GeneticMatrix(n, best, fitnessValue=best_score)
