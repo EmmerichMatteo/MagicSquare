@@ -9,7 +9,7 @@ from Algorithms.simulatedAnnealing import simulated_annealing
 from Entities.cell import Cell
 from Entities.matrix import Matrix
 
-N = 5
+N = 7
 
 def format_time(seconds: float) -> str:
     hours = int(seconds // 3600)
@@ -45,8 +45,8 @@ def main(rounds: int = 100, size: int = N, seed: int | None = None, report=None)
         matrix.print_matrix()
 
         if check_constraints(matrix.array):
-            matrix = genetic(objective_function, matrix)
-            #matrix = simulated_annealing(objective_function, matrix)
+            #matrix = genetic(objective_function, matrix)
+            matrix = simulated_annealing(objective_function, matrix)
 
         result = objective_function(matrix.array)
         solution_time = time.perf_counter() - round_start_time

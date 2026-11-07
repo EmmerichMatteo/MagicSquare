@@ -7,3 +7,4 @@ obj/
 *.egg-info/
 *.pyproj.user
 benchmark-results/
+test/results/
