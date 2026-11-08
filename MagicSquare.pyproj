@@ -26,8 +26,6 @@
     <Compile Include="Algorithms\genetic\__init__.py" />
     <Compile Include="Algorithms\genetic\genetic.py" />
     <Compile Include="Algorithms\genetic\genetic_helpers.py" />
-    <Compile Include="Algorithms\refinement.py" />
-    <Compile Include="Entities\cell.py" />
     <Compile Include="main.py" />
     <Compile Include="benchmark_unive\__init__.py" />
     <Compile Include="benchmark_unive\benchmark.py" />

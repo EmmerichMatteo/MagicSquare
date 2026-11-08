@@ -6,7 +6,3 @@ class GeneticMatrix(Matrix):
         super().__init__(n, array)
         self.fitnessValue = fitnessValue
 
-
-# Backward-compatible alias for the previous class name.
-genetic_matrix = GeneticMatrix
-

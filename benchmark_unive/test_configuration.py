@@ -59,7 +59,7 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(score, error_function_square(child))
 
     def test_configuration_input_validates_and_separates_sizes(self):
-        answers = ["y", "8 0", "8 1 0", "8 5 0", "0 5 0", "0 0 0", "16 0 0 0", "0 0 0 0", "0 0 0 0", "0 0 0 0"]
+        answers = ["y", "0", "1", "8", "2", "8", "1", "5", "5", "", "1", "16", ""]
         with redirect_stdout(StringIO()), patch("builtins.input", side_effect=answers), patch("user_input.Printer.clear_screen"):
             result = choose_initial_configuration([3, 4])
         self.assertEqual(result, {3: {0: 8, 1: 1, 4: 5}, 4: {0: 16}})
@@ -74,28 +74,28 @@ class ConfigurationTests(unittest.TestCase):
             result = simulated_annealing(fitness, 3, fixed)
         self.assertTrue(check_constraints(result.array, fixed))
 
-    def test_configuration_preview_updates_after_each_row(self):
+    def test_configuration_preview_includes_explicit_empty_cells(self):
         output = StringIO()
-        with redirect_stdout(output), patch("builtins.input", side_effect=["y", "8 0 .", "0 0 0", "0 0 0"]), patch("user_input.Printer.clear_screen") as clear:
+        answers = ["y", "1", "8", "2", "0", "3", ".", ""]
+        with redirect_stdout(output), patch("builtins.input", side_effect=answers), patch("user_input.Printer.clear_screen") as clear:
             self.assertEqual(choose_initial_configuration([3]), {3: {0: 8}})
         shown = output.getvalue()
-        self.assertEqual(shown.count("Initial configuration 3x3"), 3)
-        self.assertIn("| 0 | 0 | 0 |", shown)
         updated = shown.rsplit("Initial configuration 3x3", 1)[1]
-        self.assertIn("| 8 | 0 | 0 |", updated)
-        self.assertNotIn("1:8", updated)
-        self.assertEqual(clear.call_count, 4)
+        self.assertIn("1:8", updated)
+        self.assertIn("2:0", updated)
+        self.assertIn("3:0", updated)
+        self.assertEqual(clear.call_count, 5)
 
     def test_home_and_exit_during_matrix_input(self):
         from user_input import HomeRequested, ExitRequested
         for action, exception in (("h", HomeRequested), ("e", ExitRequested)):
-            for entries in (["y", action], ["y", "8 0 0", action]):
+            for entries in (["y", action], ["y", "1", action]):
                 with self.subTest(entries=entries), redirect_stdout(StringIO()), patch("builtins.input", side_effect=entries), patch("user_input.Printer.clear_screen"), self.assertRaises(exception):
                     choose_initial_configuration([3])
 
     def test_home_then_exit_returns_to_main_without_running(self):
         import main
-        with redirect_stdout(StringIO()), patch("builtins.input", side_effect=["1", "3", "1", "1", "y", "8 0 0", "h", "e"]), patch.object(main.Printer, "clear_screen"), patch.object(main, "run_algorithm") as run:
+        with redirect_stdout(StringIO()), patch("builtins.input", side_effect=["1", "3", "1", "y", "1", "h", "e"]), patch.object(main.Printer, "clear_screen"), patch.object(main, "run_algorithm") as run:
             main.main()
         run.assert_not_called()
 
@@ -113,10 +113,19 @@ class ConfigurationTests(unittest.TestCase):
             self.assertTrue(wait_for_home())
             clear.assert_called_once()
 
-    def test_partial_matrix_input(self):
-        with redirect_stdout(StringIO()), patch("user_input.Printer.clear_screen"), patch("builtins.input", side_effect=["y", "8 0 .", "0 5 0", ". 0 2"]):
-            fixed = choose_initial_configuration([3])
-        self.assertEqual(fixed, {3: {0: 8, 4: 5, 8: 2}})
-        result = back_tracking(3, fixed[3])
-        self.assertTrue(check_constraints(result.array, fixed[3]))
-        self.assertEqual(error_function_square(result.array), 0)
+    def test_zero_removes_a_previously_fixed_value(self):
+        with redirect_stdout(StringIO()), patch("user_input.Printer.clear_screen"), patch("builtins.input", side_effect=["y", "1", "8", "1", ".", ""]):
+            self.assertEqual(choose_initial_configuration([3]), {3: {}})
+
+    def test_genetic_uses_generations_even_with_few_free_cells(self):
+        from heapq import nsmallest
+        module = importlib.import_module("Algorithms.genetic.genetic")
+        for free_count in range(6):
+            fixed = dict(enumerate(SOLVED[:9-free_count]))
+            def fitness(array):
+                self.assertTrue(check_constraints(array, fixed))
+                return error_function_square(array) + 1
+            with self.subTest(free_count=free_count), patch.object(module, "MAX_ATTEMPTS", 1), patch.object(module, "MAX_GENERATIONS_FACTOR", 1), patch.object(module, "nsmallest", wraps=nsmallest) as select:
+                result = genetic(fitness, 3, fixed)
+            self.assertEqual(select.call_count, 9)
+            self.assertTrue(check_constraints(result.array, fixed))

@@ -56,7 +56,7 @@ class BenchmarkTests(unittest.TestCase):
 
     def test_initial_menu_test_home_and_exit(self):
         with redirect_stdout(StringIO()), \
-                patch("builtins.input", side_effect=["2", "1", "1", "1", "n", "h", "2", "b", "1", "3", "1", "1", "n", "e"]), \
+                patch("builtins.input", side_effect=["2", "1", "1", "n", "h", "2", "b", "1", "3", "1", "n", "e"]), \
                 patch.object(main.Printer, "clear_screen"), \
                 patch.object(main, "run_benchmark") as run_tests, \
                 patch.object(main, "run_algorithm") as run_algorithm:
@@ -64,11 +64,27 @@ class BenchmarkTests(unittest.TestCase):
         run_tests.assert_called_once_with(1, 3, 6, f=error_function_square, fixed_by_size={})
         run_algorithm.assert_called_once_with(main.ROUNDS, 3, 1, f=error_function_square, fixed_cells=None)
 
+    def test_function_comparison_uses_both_objectives_once(self):
+        from Algorithms.functions import error_function_absolute
+        with patch.object(benchmark, "run_benchmark") as run:
+            benchmark.run_function_comparison(5)
+        self.assertEqual(run.call_count, 2)
+        self.assertEqual([call.args for call in run.call_args_list], [(1, 5, 5), (1, 5, 5)])
+        self.assertEqual([call.kwargs for call in run.call_args_list], [
+            {"f": error_function_absolute}, {"f": error_function_square}])
+
+    def test_comparison_menu_only_asks_for_side(self):
+        with redirect_stdout(StringIO()), patch("builtins.input", side_effect=["2", "5", "4", "e"]), patch.object(main.Printer, "clear_screen"), patch.object(main, "run_function_comparison") as compare, patch.object(main, "choose_initial_configuration") as config, patch.object(main, "choose_test_rounds") as rounds:
+            main.main()
+        compare.assert_called_once_with(4)
+        config.assert_not_called()
+        rounds.assert_not_called()
+
 
 class TestSizeMenuTests(unittest.TestCase):
     def test_presets_single_and_custom_ranges(self):
         from user_input import choose_test_sizes
-        cases = [(["1"], (3, 6)), (["2"], (7, 10)),
+        cases = [(["5", "5"], ("comparison", 5)), (["1"], (3, 6)), (["2"], (7, 10)),
                  (["3", "8"], (8, 8)), (["4", "5", "9"], (5, 9)),
                  (["3", "11", "y"], (11, 11)),
                  (["4", "7", "12", "n", "2"], (7, 10)),

@@ -6,4 +6,5 @@ dist/
 obj/
 *.egg-info/
 *.pyproj.user
+MagicSquare*.zip
 benchmark_unive/benchmark-*.txt

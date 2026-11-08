@@ -1,7 +1,6 @@
 """Interactive configuration for the magic square search."""
 
 from Entities.printer import Printer
-from Algorithms.functions import error_function_square, error_function_absolute
 
 
 class HomeRequested(Exception):
@@ -103,19 +102,6 @@ def wait_for_home() -> bool:
         print("Enter home or exit")
 
 
-def choose_error_function():
-    Printer.error_function_menu()
-    while True:
-        choice = _read_choice("Error function: ").strip().lower()
-        if choice in ("b", "back"):
-            return None
-        if choice == "1":
-            return error_function_square
-        if choice == "2":
-            return error_function_absolute
-        print("Invalid choice. Enter 1, 2 or b (back).\n")
-
-
 def _choose_test_side(prompt, minimum=3):
     while True:
         choice = _read_choice(prompt).strip().lower()
@@ -136,13 +122,13 @@ def choose_test_sizes():
         choice = _read_choice("Test: ").strip().lower()
         if choice in ("b", "back"):
             return None
-        if choice in ("1", "2", "3", "4"):
+        if choice in ("1", "2", "3", "4", "5"):
             Printer.clear_screen()
         if choice == "1":
             return 3, 6
         if choice == "2":
             return 7, 10
-        if choice == "3":
+        if choice in ("3", "5"):
             size = _choose_test_side("Side length n (at least 3): ")
             if size is None:
                 continue
@@ -155,10 +141,12 @@ def choose_test_sizes():
             if upper is None:
                 continue
         else:
-            print("Invalid choice. Enter 1, 2, 3, 4 or b (back).")
+            print("Invalid choice. Enter 1, 2, 3, 4, 5 or b (back).")
             continue
         if upper > 10 and not confirm_large_square(upper):
             continue
+        if choice == "5":
+            return "comparison", lower
         return lower, upper
 
 
@@ -181,25 +169,41 @@ def choose_initial_configuration(sizes):
     Printer.clear_screen()
     for size in sizes:
         fixed = {}
-        for row in range(size):
+        displayed = {}
+        while True:
+            Printer.initial_configuration(size, displayed)
+            print("Enter Index then Value (0 or . = empty).")
+            print("Press Enter on Index to finish; b. Back")
+            entry = _read_choice("Index: ").strip().lower()
+            if entry in ("b", "back"):
+                return None
+            if not entry:
+                configurations[size] = fixed
+                Printer.clear_screen()
+                break
+            try:
+                index = int(entry)
+                if not 1 <= index <= size * size:
+                    raise ValueError(f"Index must be between 1 and {size * size}")
+            except ValueError as error:
+                print(f"Invalid index: {error}")
+                continue
             while True:
-                Printer.initial_configuration(size, fixed)
-                print(f"Enter {size} values separated by spaces; 0 or . = empty.")
-                entry = _read_choice(f"Row {row + 1}: ").strip().lower()
+                entry = _read_choice("Value: ").strip().lower()
                 if entry in ("b", "back"):
                     return None
                 try:
-                    values = [0 if token == "." else int(token) for token in entry.split()]
-                    if len(values) != size:
-                        raise ValueError(f"Enter exactly {size} values")
+                    value = 0 if entry == "." else int(entry)
                     candidate = dict(fixed)
-                    candidate.update({row * size + col: value for col, value in enumerate(values) if value != 0})
+                    candidate.pop(index - 1, None)
+                    if value != 0:
+                        candidate[index - 1] = value
                     validate_fixed_cells(size, candidate)
                 except ValueError as error:
-                    print(f"Invalid row: {error}")
+                    print(f"Invalid value: {error}")
                     continue
                 fixed = candidate
+                displayed[index - 1] = value
                 Printer.clear_screen()
                 break
-        configurations[size] = fixed
     return configurations

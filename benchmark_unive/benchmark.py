@@ -11,7 +11,7 @@ if __package__ in (None, ""):
 
 from Algorithms.backtracking.backtracking import back_tracking
 from Algorithms.configuration import validate_fixed_cells
-from Algorithms.functions import check_constraints, error_function_square
+from Algorithms.functions import check_constraints, error_function_absolute, error_function_square
 from Algorithms.genetic.genetic import genetic
 from Algorithms.simulated_annealing.simulated_annealing import simulated_annealing
 from Entities.printer import Printer
@@ -83,6 +83,14 @@ def run_benchmark(rounds: int, min_size: int = 3, max_size: int = 6,
     return output
 
 
+def run_function_comparison(size: int):
+    """One run per algorithm and objective, without fixed cells."""
+    reports = []
+    for f in (error_function_absolute, error_function_square):
+        reports.append(run_benchmark(1, size, size, f=f))
+    return reports
+
+
 def _main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rounds", type=int, default=1)
@@ -91,15 +99,14 @@ def _main() -> None:
     args = parser.parse_args()
     if args.rounds < 1 or args.min_size < 3 or args.max_size < args.min_size:
         parser.error("Use positive rounds and 3 <= min-size <= max-size")
-    from user_input import choose_initial_configuration, choose_error_function, confirm_large_square
+    from user_input import choose_initial_configuration, confirm_large_square
     Printer.clear_screen()
     if args.max_size > 10 and not confirm_large_square(args.max_size):
         return
-    f = choose_error_function()
-    if f is not None:
-        configurations = choose_initial_configuration(range(args.min_size, args.max_size + 1))
-        if configurations is not None:
-            run_benchmark(args.rounds, args.min_size, args.max_size, f=f, fixed_by_size=configurations)
+    configurations = choose_initial_configuration(range(args.min_size, args.max_size + 1))
+    if configurations is not None:
+        Printer.clear_screen()
+        run_benchmark(args.rounds, args.min_size, args.max_size, fixed_by_size=configurations)
 
 
 def main() -> None:

@@ -1,28 +1,26 @@
-# MagicSquare
+﻿# MagicSquare
 
 ## University benchmark
 
-`python main.py` apre il menu iniziale in inglese:
-`1. Try algorithms` per la prova interattiva e `2. Run tests` per il benchmark.
-Il menu dei test permette di scegliere 3x3?6x6, 7x7?10x10, una dimensione
-singola n oppure un intervallo libero da a a b (inclusi, con 3 <= a <= b).
-Poi chiede il numero di ripetizioni, la funzione di errore e, per ultima,
-la configurazione iniziale opzionale.
-Per dimensioni superiori a 10 chiede conferma, avvisando che la ricerca puo
-richiedere molto tempo. Per ogni dimensione esegue
-prima tutte le ripetizioni del backtracking, poi simulated annealing, poi genetico.
-Ogni tentativo viene eseguito anche se il precedente ha trovato una soluzione.
-Sia Try sia test chiedono la funzione di errore:
-`1. Squared error` oppure `2. Absolute error`, con `b. Back` per tornare indietro.
-La scelta vale per tutte le prove del benchmark e viene indicata nel report.
+`python main.py` opens the main menu in English:
+`1. Try algorithms` for interactive runs and `2. Run tests` for benchmarks.
+The test menu lets you choose 3x3 to 6x6, 7x7 to 10x10, a single size n,
+or a custom range from a to b (inclusive, with 3 <= a <= b).
+It then asks for the number of runs and, finally, an optional initial
+configuration.
+For sizes greater than 10, it asks for confirmation and warns that the search
+may take a long time. For each size, it runs all backtracking attempts first,
+then simulated annealing, then the genetic algorithm.
+Every attempt runs even if the previous one found a solution.
+Interactive runs and tests use the squared error function by default.
 
-Il file `benchmark_unive/benchmark.py` salva un report di testo in inglese
-in `benchmark_unive/benchmark-DATA-ORA.txt`, con impostazioni, tempi,
-fitness, validita e matrici. I report sono esclusi da Git.
-`Ctrl+C` interrompe il benchmark conservando i risultati completati.
-Non viene imposto un timeout aggiuntivo ai singoli algoritmi.
+`benchmark_unive/benchmark.py` saves an English text report to
+`benchmark_unive/benchmark-DATE-TIME.txt`, including settings, execution times,
+fitness scores, validity checks, and matrices. Reports are excluded from Git.
+`Ctrl+C` interrupts the benchmark while preserving completed results.
+No additional timeout is imposed on individual algorithms.
 
-Per configurare l'intervallo da axa a bxb e le ripetizioni dalla riga di comando:
+To configure the range from a x a to b x b and the number of runs from the command line:
 
 ```powershell
 python benchmark_unive/benchmark.py --min-size 3 --max-size 6 --rounds 2
@@ -30,9 +28,9 @@ python benchmark_unive/benchmark.py --min-size 3 --max-size 6 --rounds 2
 
 ## Backtracking
 
-`back_tracking(n)` riceve la dimensione e usa una copia di `Matrix.empty(n)`,
-il modello condiviso di matrice con tutte le celle a zero.
-Restituisce la matrice risolta oppure `None` se non esiste una soluzione.
+`back_tracking(n)` takes the side length and uses a copy of `Matrix.empty(n)`,
+the shared matrix template with all cells set to zero.
+It returns the solved matrix, or `None` if no solution exists.
 
 ```python
 from Algorithms.backtracking.backtracking import back_tracking
@@ -42,72 +40,62 @@ if solution is not None:
     solution.print_matrix()
 ```
 
-La ricerca usa MRV, LCV, forward checking per l'unicita e limiti Min/Max
-sulle somme di righe, colonne e diagonali. Quando in una linea manca una
-sola cella, ne assegna il valore obbligato; elimina inoltre dai domini i
-candidati incompatibili con le somme. La propagazione continua fino a
-stabilizzare i domini e scarta il ramo se un dominio diventa vuoto o una
-somma e impossibile.
+The search uses MRV, LCV, forward checking for uniqueness, and minimum/maximum
+bounds on row, column, and diagonal sums. When a line has only one empty cell,
+it assigns the required value; it also removes candidates incompatible with
+the sums from the domains. Propagation continues until the domains stabilize
+and rejects a branch if a domain becomes empty or a sum is impossible.
 
-## Prova interattiva
+## Interactive runs
 
-La modalita `Try algorithms` chiede quale algoritmo avviare: `1` backtracking con
-propagazione dei vincoli, `2` simulated annealing, `3` genetico.
-Le scelte non valide vengono richieste nuovamente.
-La schermata della dimensione non offre il back.
-Le schermate successive mostrano la voce `b. Back` (dopo `3.` nel menu
-algoritmi): dal menu algoritmi e dalla conferma si torna alla dimensione.
-Dopo il risultato, `h. Home` torna al menu iniziale con prova e test.
-La voce `e. Exit` chiude il programma.
-Durante la ricerca, `Ctrl+C` interrompe il calcolo e
-torna allo stesso menu.
-Prima del menu viene chiesta la lunghezza del lato, un intero maggiore di 2.
-Per lati superiori a 10 viene richiesta conferma, dato il possibile tempo di ricerca.
-Anche `Matrix` e `Matrix.empty` richiedono un lato maggiore di 2.
-Il genetico gestisce internamente fino a 100 tentativi (`MAX_ATTEMPTS`),
-fermandosi alla prima soluzione. Try e benchmark chiamano la stessa funzione.
-Per gli altri algoritmi, Try usa `ROUNDS` di `main.py` (default: 100).
-La classe `Printer` in `Entities/printer.py` raccoglie i metodi statici
-per stampare menu, soluzione, tempi e riepilogo.
+`Try algorithms` asks which algorithm to run: `1` backtracking with constraint
+propagation, `2` simulated annealing, or `3` the genetic algorithm.
+Invalid choices are requested again.
+The size selection screen does not offer a Back option.
+Subsequent screens show `b. Back` (after `3.` in the algorithm menu):
+the algorithm menu and confirmation screen return to size selection.
+After a result, `h. Home` returns to the main menu with interactive runs and tests.
+`e. Exit` closes the program.
+During a search, `Ctrl+C` interrupts the computation and returns to the algorithm menu.
+Before the algorithm menu, the program asks for the side length, an integer greater than 2.
+Side lengths greater than 10 require confirmation because the search may take a long time.
+`Matrix` and `Matrix.empty` also require a side length greater than 2.
+The genetic algorithm manages up to 100 attempts internally (`MAX_ATTEMPTS`),
+stopping at the first solution. Interactive runs and benchmarks call the same function.
+For the other algorithms, interactive runs use `ROUNDS` from `main.py` (default: 100).
+The `Printer` class in `Entities/printer.py` groups static methods for printing
+menus, solutions, execution times, and summaries.
 
-## Funzioni di errore
+## Error functions
 
-In `Algorithms/functions.py`, `error_function_square` somma i quadrati degli
-scarti dalla somma magica di righe, colonne e delle due diagonali.
-`error_function_absolute` somma i valori assoluti degli stessi scarti.
-Entrambe valgono zero quando tutte le somme coincidono con la somma magica.
-Il backtracking usa i propri vincoli; la scelta determina la fitness riportata
-anche per il suo risultato.
+In `Algorithms/functions.py`, `error_function_square` sums the squared
+deviations from the magic sum for rows, columns, and both diagonals.
+`error_function_absolute` sums the absolute values of the same deviations.
+Both return zero when all sums match the magic sum.
+Backtracking uses its own constraints; the selected error function also
+determines the fitness reported for its result.
 
-## Configurazione iniziale
+## Initial configuration
 
-Come ultima opzione, Try e test chiedono se fissare alcuni valori (`y`, `n`,
-`b. Back`). La matrice si inserisce riga per riga, con valori separati da
-spazi e `0` o `.` per le celle libere. La griglia si aggiorna dopo ogni riga,
-pulendo lo schermo.
-Nei test su intervallo si inserisce una configurazione separata per ogni
-lato, condivisa da tutti gli algoritmi e tutte le ripetizioni di quel lato.
-Una matrice di soli zeri lascia quella dimensione libera.
+As the final option, interactive runs and tests 1 to 4 ask whether to fix any
+values (`y`, `n`, `b. Back`). The grid numbers cells from 1 to n squared.
+Enter `Index` and then `Value`; the cell displays `index:value`.
+Entering `0` or `.` displays `index:0` and leaves the cell free for the search.
+Press Enter at the Index prompt to finish the matrix.
+The screen clears after each entry. Home, Back, and Exit remain available.
+For size ranges, enter one configuration per side length; it is shared by all
+algorithms and runs for that size.
 
-Le API `back_tracking(n, fixed_cells=None)`,
-`genetic(f, n, fixed_cells=None)` e `simulated_annealing(f, n, fixed_cells=None)`
-accettano un dizionario `{indice: valore}` con indice lineare da zero.
-Il runner riceve `fixed_cells`; il benchmark riceve
-`fixed_by_size={n: fixed_cells}`. I valori fissati vengono mantenuti durante
-la ricerca e verificati nell'esito; le configurazioni possono anche non
-ammettere una soluzione. Il report registra le celle fissate per ogni lato.
+The APIs `back_tracking(n, fixed_cells=None)`, `genetic(f, n, fixed_cells=None)`,
+and `simulated_annealing(f, n, fixed_cells=None)` accept a dictionary
+`{index: value}` with zero-based linear indices. Zero entries in the input grid
+are omitted from the fixed-cell dictionary.
+The runner accepts `fixed_cells`; the benchmark accepts `fixed_by_size={n: fixed_cells}`.
 
-Ogni richiesta di input offre `h. Home` per tornare al menu iniziale e
-`e. Exit` per uscire, anche durante l?inserimento delle righe.
+## Test 5: Absolute vs Square
 
-Inserire n righe di n
-valori separati da spazi, usando `0` o `.` nelle celle libere. Esempio 3x3:
-
-```text
-8 0 0
-0 5 0
-0 0 2
-```
-
-Questa configurazione viene passata a backtracking, genetico e simulated
-annealing, che completano le celle libere mantenendo i valori fissati.
+This test asks only for the side length and runs every algorithm once with
+absolute error, then once with squared error, saving both reports.
+It does not ask for the number of runs or an initial configuration.
+For sizes greater than 10, it asks for confirmation because execution may take
+a long time, as with the other tests.

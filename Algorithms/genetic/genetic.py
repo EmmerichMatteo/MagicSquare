@@ -1,8 +1,7 @@
 import random
 from heapq import nsmallest
-from itertools import permutations
 from math import factorial
-from Algorithms.configuration import validate_fixed_cells, random_completion
+from Algorithms.configuration import validate_fixed_cells
 
 from Entities.geneticMatrix import GeneticMatrix
 from .genetic_helpers import (
@@ -24,21 +23,6 @@ MAX_ATTEMPTS = 100
 
 def genetic(f, n, fixed_cells=None) -> GeneticMatrix:
     fixed = validate_fixed_cells(n, fixed_cells)
-    free = [i for i in range(n*n) if i not in fixed]
-    # A heavily constrained square has too few permutations for a population.
-    if len(free) <= 5:
-        array = random_completion(n, fixed)
-        best = None
-        for values in permutations([array[i] for i in free]):
-            candidate = array.copy()
-            for i, value in zip(free, values):
-                candidate[i] = value
-            score = int(f(candidate))
-            if best is None or score < best.fitnessValue:
-                best = GeneticMatrix(n, candidate, score)
-            if score == 0:
-                break
-        return best
     best = None
     for _ in range(MAX_ATTEMPTS):
         result = _genetic_attempt(f, n, fixed)

@@ -60,7 +60,7 @@ class Printer:
         print("--------------------------------------------")
 
     @staticmethod
-    def solution(matrix, fitness, seconds: float) -> None:
+    def solution(matrix, fitness) -> None:
         matrix.print_matrix()
         for i in range(matrix.n):
             print(f"Row sum {i + 1}: {matrix.row_sum(i)}")
@@ -71,19 +71,12 @@ class Printer:
         print(f"Final fitness: {fitness}")
 
     @staticmethod
-    def summary(count: int, rounds: int, seconds: float) -> None:
+    def summary(seconds: float) -> None:
         print(f"Total execution time: {Printer.format_time(seconds)}\n")
 
     @staticmethod
     def no_solution() -> None:
         print("No solution found by backtracking.")
-
-    @staticmethod
-    def error_function_menu() -> None:
-        print("Choose the error function:")
-        print("1. Squared error")
-        print("2. Absolute error")
-        print("b. Back")
 
     @staticmethod
     def test_menu() -> None:
@@ -92,17 +85,20 @@ class Printer:
         print("2. 7x7 to 10x10")
         print("3. Single size (n x n)")
         print("4. Custom range (a to b)")
+        print("5. Function absolute vs square (one run)")
         print("b. Back")
 
     @staticmethod
     def initial_configuration(size: int, fixed_cells) -> None:
         print(f"\nInitial configuration {size}x{size}")
-        print("0 = empty cell; other numbers = fixed values")
-        width = len(str(size * size))
+        print("Cell indices; index:value = entered value; 0 = empty")
+        width = 2 * len(str(size * size)) + 1
         separator = "+" + "+".join("-" * (width + 2) for _ in range(size)) + "+"
         print(separator)
         for row in range(size):
-            cells = [str(fixed_cells.get(row * size + col, 0)) for col in range(size)]
+            cells = [f"{row * size + col + 1}:{fixed_cells[row * size + col]}"
+                     if row * size + col in fixed_cells else str(row * size + col + 1)
+                     for col in range(size)]
             print("|" + "|".join(f" {cell:^{width}} " for cell in cells) + "|")
             print(separator)
         print()

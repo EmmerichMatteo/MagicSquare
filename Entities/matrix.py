@@ -1,8 +1,6 @@
 from copy import copy
 from functools import lru_cache
 
-from Entities.cell import Cell
-
 
 class Matrix:
     _empty_matrices = {}
@@ -71,19 +69,6 @@ class Matrix:
             self.value = (self.objective_function(self.array) if delta is None
                           else self.value + delta)
 
-    def _index(self, cell: Cell) -> int:
-        if not isinstance(cell.key, int) or not 0 <= cell.key < self.n * self.n:
-            raise IndexError("cell outside the matrix")
-        return cell.key
-
-    def __getitem__(self, cell: Cell) -> int:
-        return self.array[self._index(cell)]
-
-    def __setitem__(self, cell: Cell, value: int) -> None:
-        self.array[self._index(cell)] = value
-        if self.objective_function is not None:
-            self.value = self.objective_function(self.array)
-
     def print_matrix(self) -> None:
         width = len(str(self.n ** 2))
         separator = "|" + "|".join("_" * (width + 2) for _ in range(self.n)) + "|"
@@ -112,19 +97,6 @@ class Matrix:
     def secondary_diagonal_sum(self) -> int:
         return sum(self.array[i * self.n + (self.n - 1 - i)] for i in range(self.n))
 
-    def neighbor(self, cell: Cell) -> list[Cell]:
-        key = self._index(cell)
-        neighbors = []
-        if key % self.n > 0:
-            neighbors.append(Cell(key - 1, self.array[key - 1]))
-        if key % self.n < self.n - 1:
-            neighbors.append(Cell(key + 1, self.array[key + 1]))
-        if key >= self.n:
-            neighbors.append(Cell(key - self.n, self.array[key - self.n]))
-        if key < self.n * (self.n - 1):
-            neighbors.append(Cell(key + self.n, self.array[key + self.n]))
-        return neighbors
-
     @staticmethod
     def _line_errors(array, n):
         target = n * (n * n + 1) // 2
@@ -134,12 +106,6 @@ class Matrix:
         errors.append(sum(array[r * n + r] for r in range(n)) - target)
         errors.append(sum(array[r * n + n - 1 - r] for r in range(n)) - target)
         return errors
-
-
-    @staticmethod
-    def _cell_lines(n):
-        return Matrix._line_structure(n)[1]
-
 
     @staticmethod
     def _swap_changes(array, i, j, lines):

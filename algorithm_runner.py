@@ -1,4 +1,4 @@
-"""Esecuzione dei tentativi di ricerca e gestione dei risultati."""
+"""Run search attempts and handle their results."""
 
 import json
 import time
@@ -11,8 +11,6 @@ from Entities.printer import Printer
 
 
 def run_algorithm(rounds: int, size: int, algorithm: int, report=None, f=error_function_square, fixed_cells=None) -> None:
-    count = 0
-    round = 0
     total_start_time = time.perf_counter()
     if algorithm == 1:
         solve = lambda n: back_tracking(n, fixed_cells=fixed_cells)
@@ -22,8 +20,7 @@ def run_algorithm(rounds: int, size: int, algorithm: int, report=None, f=error_f
         solve = lambda n: genetic(f, n, fixed_cells=fixed_cells)
 
     # Genetic owns its retry budget; invoke it once, as the benchmark does.
-    for i in range(1 if algorithm == 3 else rounds):
-        round += 1
+    for attempt in range(1, (1 if algorithm == 3 else rounds) + 1):
         round_start_time = time.perf_counter()
         matrix = solve(size)
         result = f(matrix.array) if matrix is not None else None
@@ -31,16 +28,15 @@ def run_algorithm(rounds: int, size: int, algorithm: int, report=None, f=error_f
         solved = matrix is not None and result == 0 and check_constraints(matrix.array, fixed_cells)
         if report is not None:
             report.write(json.dumps({
-                "round": round, "seconds": solution_time,
+                "round": attempt, "seconds": solution_time,
                 "fitness": result, "solved": solved,
                 "matrix": matrix.array if matrix is not None else None,
             }) + "\n")
             report.flush()
         if solved:
-            count = count + 1
-            Printer.solution(matrix, result, solution_time)
+            Printer.solution(matrix, result)
             total_elapsed_time = time.perf_counter() - total_start_time
-            Printer.summary(count, round, total_elapsed_time)
+            Printer.summary(total_elapsed_time)
             return
         if matrix is None:
             Printer.no_solution()
@@ -48,4 +44,4 @@ def run_algorithm(rounds: int, size: int, algorithm: int, report=None, f=error_f
         Printer.separator()
 
     total_elapsed_time = time.perf_counter() - total_start_time
-    Printer.summary(count, round, total_elapsed_time)
+    Printer.summary(total_elapsed_time)
