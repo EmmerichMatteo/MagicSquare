@@ -1,98 +1,79 @@
-from Algorithms.genetic import genetic
-import argparse
-import json
-import random
-import time
+from algorithm_runner import run_algorithm
+from benchmark_unive.benchmark import run_benchmark
+from Entities.printer import Printer
+from user_input import HomeRequested, ExitRequested, choose_initial_configuration, choose_error_function, choose_algorithm, choose_mode, choose_size, choose_test_rounds, choose_test_sizes, wait_for_home
 
-from Algorithms.functions import check_constraints, objective_function
-from Algorithms.simulatedAnnealing import simulated_annealing
-from Entities.cell import Cell
-from Entities.matrix import Matrix
+ROUNDS = 100
 
-N = 10
+def try_algorithms() -> bool:
+    while True:
+        size = choose_size()
+        while True:
+            Printer.clear_screen()
+            algorithm = choose_algorithm()
+            if algorithm is None:
+                Printer.clear_screen()
+                break
+            Printer.clear_screen()
+            f = choose_error_function()
+            if f is None:
+                continue
+            Printer.clear_screen()
+            configurations = choose_initial_configuration([size])
+            if configurations is None:
+                continue
+            Printer.clear_screen()
+            Printer.execution_details(size, algorithm)
+            print(f"Error function: {f.__name__}\n")
+            print("Press Ctrl+C during the search to go back to the algorithm menu.")
+            try:
+                run_algorithm(ROUNDS, size, algorithm, f=f, fixed_cells=configurations.get(size))
+            except KeyboardInterrupt:
+                print("\nSearch interrupted.")
+                continue
+            if not wait_for_home():
+                return False
+            return True
 
-def format_time(seconds: float) -> str:
-    hours = int(seconds // 3600)
-    minutes = int((seconds % 3600) // 60)
-    secs = seconds % 60
-    return f"{hours:02d}:{minutes:02d}:{secs:06.3f}"
 
-def main(rounds: int = 100, size: int = N, seed: int | None = None, report=None) -> None:
-    if rounds <= 0 or size <= 2:
-        raise ValueError("rounds must be positive and size must be greater than 2")
-    if seed is not None:
-        random.seed(seed)
-    N = size
-    count = 0
-    round = 0
-    total_start_time = time.perf_counter()
-
-    for i in range(rounds):
-        round += 1
-        round_start_time = time.perf_counter()
-        matrix = Matrix(N)
-        generated = [0] * (N * N)
-
-        for key in range(N * N):
-            index = random.randrange(N * N)
-            while generated[index] == 1:
-                index = random.randrange(N * N)
-
-            generated[index] = 1
-            number = index + 1
-            matrix[Cell(key, number)] = number
-
-        matrix.print_matrix()
-
-        if check_constraints(matrix.array):
-            #matrix = genetic(objective_function, matrix)
-            matrix = simulated_annealing(objective_function, matrix)
-
-        result = objective_function(matrix.array)
-        solution_time = time.perf_counter() - round_start_time
-        solved = result == 0 and check_constraints(matrix.array)
-        if report is not None:
-            report.write(json.dumps({
-                "round": round, "seconds": solution_time,
-                "fitness": result, "solved": solved, "matrix": matrix.array,
-            }) + "\n")
-            report.flush()
-        if solved:
-            count = count + 1
-            matrix.print_matrix()
-
-            for i in range(N):
-                print(f"Row sum {i + 1}: {matrix.row_sum(i)}")
-
-            for j in range(N):
-                print(f"Column sum {j + 1}: {matrix.column_sum(j)}")
-
-            print(f"Main diagonal sum: {matrix.main_diagonal_sum()}")
-            print(f"Secondary diagonal sum: {matrix.secondary_diagonal_sum()}")
-            print(f"Final fitness: {result}")
-            print(f"Time to find this solution: {format_time(solution_time)}")
-            
-            print(f"Number of solutions after {round} rounds: {count}")
-            total_elapsed_time = time.perf_counter() - total_start_time
-            print(f"Total execution time: {format_time(total_elapsed_time)}")
+def main() -> None:
+    Printer.title()
+    while True:
+        try:
+            mode = choose_mode()
+            Printer.clear_screen()
+            if mode == 1:
+                if not try_algorithms():
+                    return
+            else:
+                while True:
+                    sizes = choose_test_sizes()
+                    if sizes is None:
+                        break
+                    min_size, max_size = sizes
+                    print(f"Sizes: {min_size}x{min_size} to {max_size}x{max_size} | All algorithms")
+                    rounds = choose_test_rounds()
+                    if rounds is None:
+                        continue
+                    Printer.clear_screen()
+                    f = choose_error_function()
+                    if f is None:
+                        continue
+                    Printer.clear_screen()
+                    configurations = choose_initial_configuration(range(min_size, max_size + 1))
+                    if configurations is None:
+                        continue
+                    Printer.clear_screen()
+                    run_benchmark(rounds, min_size, max_size, f=f, fixed_by_size=configurations)
+                    if not wait_for_home():
+                        return
+                    break
+            Printer.clear_screen()
+        except HomeRequested:
+            Printer.clear_screen()
+        except ExitRequested:
             return
-        print("--------------------------------------------")
 
-    total_elapsed_time = time.perf_counter() - total_start_time
-    print(f"Number of solutions found: {count}/{round}")
-    print(f"Total execution time: {format_time(total_elapsed_time)}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Ricerca di quadrati magici")
-    parser.add_argument("--rounds", type=int, default=100)
-    parser.add_argument("--size", type=int, default=N)
-    parser.add_argument("--seed", type=int)
-    parser.add_argument("--report", help="Report JSONL dei tentativi completati")
-    args = parser.parse_args()
-    if args.rounds <= 0 or args.size <= 2:
-        parser.error("--rounds deve essere positivo e --size almeno 3")
-    if args.report:
-        with open(args.report, "w", encoding="utf-8") as report:
-            main(args.rounds, args.size, args.seed, report)
-    else:
-        main(args.rounds, args.size, args.seed)
+    main()

@@ -6,5 +6,4 @@ dist/
 obj/
 *.egg-info/
 *.pyproj.user
-benchmark-results/
-test/results/
+benchmark_unive/benchmark-*.txt

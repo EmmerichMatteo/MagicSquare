@@ -1,9 +1,9 @@
 from itertools import combinations
 from time import process_time
-from Algorithms.functions import objective_function, check_constraints
+from Algorithms.functions import error_function_square, check_constraints
 
 
-def refine(array, depth=1, max_steps=10, max_evaluations=200000, f=objective_function):
+def refine(array, depth=1, max_steps=10, max_evaluations=200000, f=error_function_square):
     start = process_time()
     current = list(array)
     score = int(f(current))
@@ -72,7 +72,7 @@ def refine(array, depth=1, max_steps=10, max_evaluations=200000, f=objective_fun
                 budget_exhausted=exhausted, array=current)
 
 
-def beam_refine(array, width=50, max_depth=12, max_evaluations=100000, f=objective_function):
+def beam_refine(array, width=50, max_depth=12, max_evaluations=100000, f=error_function_square):
     from heapq import nsmallest
     start = process_time()
     initial = tuple(array)
@@ -123,7 +123,7 @@ def beam_refine(array, width=50, max_depth=12, max_evaluations=100000, f=objecti
                 reason=reason, depth=reached_depth)
 
 
-def final_refine(array, f=objective_function):
+def final_refine(array, f=error_function_square):
     """Refine a matrix using bounded single-swap, double-swap and beam searches."""
     start = process_time()
     current = list(array)

@@ -15,17 +15,34 @@
   <PropertyGroup Condition="'$(Configuration)' == 'Debug'" />
   <PropertyGroup Condition="'$(Configuration)' == 'Release'" />
   <ItemGroup>
+    <Compile Include="Algorithms\backtracking\__init__.py" />
+    <Compile Include="Algorithms\backtracking\backtracking.py" />
+    <Compile Include="Algorithms\backtracking\backtracking_helpers.py" />
     <Compile Include="Algorithms\functions.py" />
-    <Compile Include="Algorithms\simulatedAnnealing.py" />
-    <Compile Include="Algorithms\genetic.py" />
+    <Compile Include="Algorithms\configuration.py" />
+    <Compile Include="Algorithms\simulated_annealing\__init__.py" />
+    <Compile Include="Algorithms\simulated_annealing\simulated_annealing.py" />
+    <Compile Include="Algorithms\simulated_annealing\simulated_annealing_helpers.py" />
+    <Compile Include="Algorithms\genetic\__init__.py" />
+    <Compile Include="Algorithms\genetic\genetic.py" />
+    <Compile Include="Algorithms\genetic\genetic_helpers.py" />
     <Compile Include="Algorithms\refinement.py" />
     <Compile Include="Entities\cell.py" />
     <Compile Include="main.py" />
+    <Compile Include="benchmark_unive\__init__.py" />
+    <Compile Include="benchmark_unive\benchmark.py" />
+    <Compile Include="algorithm_runner.py" />
+    <Compile Include="user_input.py" />
     <Compile Include="Entities\matrix.py" />
+    <Compile Include="Entities\printer.py" />
     <Compile Include="Entities\geneticMatrix.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Algorithms\" />
+    <Folder Include="Algorithms\backtracking\" />
+    <Folder Include="Algorithms\simulated_annealing\" />
+    <Folder Include="Algorithms\genetic\" />
+    <Folder Include="benchmark_unive\" />
     <Folder Include="Entities\" />
   </ItemGroup>
   <PropertyGroup>
@@ -34,4 +51,3 @@
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <Target Name="CoreCompile" />
 </Project>
-
